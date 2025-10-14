@@ -2,401 +2,589 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Dukey’s Roadtrip</title>
   <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { background: radial-gradient(1200px 600px at 20% -10%, #14213D 0%, #0A0F1C 40%); }
+    :root{
+      --bg:#0A0F1C; --card:#0F172A; --accent:#9ED2FF; --text:#E5E7EB; --sub:#94A3B8;
+    }
+    body{background: radial-gradient(1200px 600px at 20% -10%, #14213D 0%, var(--bg) 40%); color:var(--text);}
+    .chip{transition:all .2s ease}
+    .chip:hover{transform:translateY(-1px)}
+    .card{transition: box-shadow .2s ease, transform .2s ease, border-color .2s ease}
+    .card:hover{box-shadow:0 8px 40px #9ED2FF22; border-color:var(--accent); transform:translateY(-2px) scale(1.01)}
+    .drop{max-height:0; overflow:hidden; transition:max-height .3s ease}
+    .card.open .drop{max-height:650px}
+    .kbd{font-variant-numeric: tabular-nums;}
   </style>
-  <!-- React + ReactDOM (UMD) -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <!-- Babel Standalone to run JSX in browser -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
-<body class="min-h-screen text-white">
-  <div id="root"></div>
+<body class="min-h-screen">
+  <!-- Header -->
+  <header class="sticky top-0 z-20 backdrop-blur bg-black/40 border-b border-white/10">
+    <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+      <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">Dukey’s Roadtrip</h1>
+      <nav class="flex gap-2">
+        <button id="tabPod" class="px-3 py-1 rounded-full text-sm border bg-white text-black border-white">Podcasts</button>
+        <button id="tabMus" class="px-3 py-1 rounded-full text-sm border bg-transparent text-white border-white/40 hover:border-white">Musik</button>
+      </nav>
+    </div>
+  </header>
 
-  <script type="text/babel">
-    const { useMemo, useState, useEffect } = React;
+  <!-- Main -->
+  <main class="mx-auto max-w-6xl px-4 py-8">
+    <!-- Controls -->
+    <section class="mb-8">
+      <div class="grid gap-3 sm:grid-cols-[1fr_auto] items-center">
+        <input id="search" placeholder="Suche…" class="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-[15px] outline-none focus:border-white/40 placeholder:text-white/50" />
+        <div class="text-sm text-white/70"><span id="count">0</span> Ergebnisse</div>
+      </div>
 
-    // ───────── Theme ─────────
-    const theme = {
-      bg: "#0A0F1C",
-      card: "#0F172A",
-      accent: "#9ED2FF",
-      text: "#E5E7EB",
-      sub: "#94A3B8",
+      <!-- Filter-Chips (Podcasts dynamisch: Sprache/Länge/Neu) -->
+      <div id="chipsPod" class="mt-4 flex flex-wrap gap-2"></div>
+
+      <!-- Genre-Chips (Musik) -->
+      <div id="chipsMus" class="mt-4 hidden flex-wrap gap-2"></div>
+      <div id="genreHint" class="mt-2 hidden text-xs text-white/60">Tipp: Du kannst mehrere Genres gleichzeitig aktivieren/deaktivieren.</div>
+    </section>
+
+    <!-- List -->
+    <section id="list" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></section>
+
+    <!-- Notes -->
+    <section class="mt-10 rounded-2xl border border-white/10 bg-white/5 p-5">
+      <h2 class="text-base font-semibold">Hinweise</h2>
+      <ul class="mt-2 text-[15px] space-y-1 list-disc pl-5 text-white/80">
+        <li>Karte anklicken → Dropdown mit Details (Release/Produktion/Key-Tracks/Awards/Warum für dich).</li>
+        <li>Bewertungen (falls vorhanden) im 10-Punkte-System.</li>
+        <li>Design: hoher Kontrast, Baby-Blau (<span class="kbd">#9ED2FF</span>), Hover-Glow + dezentes Zoom.</li>
+      </ul>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="mx-auto max-w-6xl px-4 py-10 text-sm text-white/60">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <p>Dukey’s Roadtrip – kuratierte Podcasts & Alben für lange Fahrten.</p>
+      <p>© <span id="year"></span> Dukey’s Roadtrip</p>
+    </div>
+  </footer>
+
+  <!-- Data + App -->
+  <script>
+    // ================= THEME =================
+    const ACCENT = getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#9ED2FF';
+
+    // ================= DATA =================
+    // Podcasts (vollständig aus deiner letzten Version, Links wie gehabt)
+    const PODCASTS = [
+      { title:"Serial – Season 1", publisher:"Serial Productions / NYT", episodes:12, length:"~8.5–9 h", lang:"EN", year:2014,
+        link:"https://open.spotify.com/show/5wMPFS9B5V7gg6hZ3UZ7hf",
+        blurb:"Storytelling-True-Crime über Adnan Syed – präzise, mit starken Wendungen.",
+        extra:{release:"2014", awards:"Peabody Award", why:"Du magst sauberes Handwerk & Dramaturgie – hält dich wach und im Flow."}, rating10:9.6 },
+      { title:"S-Town", publisher:"Serial / This American Life", episodes:7, length:"~7.5 h", lang:"EN", year:2017,
+        link:"https://open.spotify.com/show/1KPTM79Wn9vkWX0UoMYyrd",
+        blurb:"Von der Recherche zum Porträt – poetisch, dicht, binge-bar.",
+        extra:{release:"2017", awards:"Peabody u. a.", why:"Du liebst Atmosphäre & Charaktertiefe – akustisches A24."}, rating10:9.3 },
+      { title:"In the Dark (S1)", publisher:"APM Reports", episodes:10, length:"~8–9 h", lang:"EN", year:2016,
+        link:"https://open.spotify.com/show/1aFyRYDJ1pHEaPMnZAGaOr",
+        blurb:"Investigativ zu Strafverfolgung (Curtis Flowers).", extra:{why:"Du willst Substanz & Klarheit – ideal für konzentrierte Etappen."}, rating10:9.2 },
+      { title:"The Dropout", publisher:"ABC News", episodes:8, length:"~6–7 h", lang:"EN", year:2019,
+        link:"https://open.spotify.com/show/7lrJqILWfMuQhqDHJEFUK6",
+        blurb:"Theranos/Elizabeth Holmes – Aufstieg, Täuschung, Prozess.", extra:{why:"Große Betrugsstory, glasklar erzählt – null Leerlauf."}, rating10:8.9 },
+      { title:"Wind of Change", publisher:"Pineapple / Crooked", episodes:8, length:"~6–7 h", lang:"EN", year:2020,
+        link:"https://open.spotify.com/show/3vikAuFxKVNe2GBZC61IYD",
+        blurb:"CIA-These & Pop-Mythos – maximal unterhaltsam.", extra:{why:"Musik + Geheimdienst-Vibes – perfektes Mischgenre fürs Fahren."}, rating10:8.6 },
+      { title:"The Missing Cryptoqueen", publisher:"BBC", episodes:8, length:"~7–8 h", lang:"EN", year:2019,
+        link:"https://open.spotify.com/show/5nk7d9MLCgE3M47mXPW7MP",
+        blurb:"OneCoin – Milliardenbetrug, Jagd nach Ruja.", extra:{why:"Internationale Jagd + Cliffhanger – zieht gut durch."}, rating10:8.8 },
+      { title:"Bear Brook", publisher:"NHPR", episodes:10, length:"~8–9 h", lang:"EN", year:2018,
+        link:"https://open.spotify.com/show/7DmP8qi4QK5vLGZVFPfyZO",
+        blurb:"Cold-Case, DNA-Revolution – Genre-prägend.", extra:{why:"Forensik + Struktur – ideal fürs Miträtseln."}, rating10:9.0 },
+      { title:"Sweet Bobby", publisher:"Tortoise", episodes:6, length:"~5 h", lang:"EN", year:2021,
+        link:"https://open.spotify.com/show/0pxg9zewLAYxhcmbJ4CL0Q",
+        blurb:"High-end Catfishing – kompakt & präzise.", extra:{why:"Moderner Social-Crime-Fall – perfekt für einen Fahrtabschnitt."}, rating10:8.5 },
+      { title:"The Trojan Horse Affair", publisher:"Serial / NYT", episodes:8, length:"~7 h", lang:"EN", year:2022,
+        link:"https://open.spotify.com/show/2isrOkJ401yfYNVDEhtdey",
+        blurb:"Ein Brief, ein Skandal, ein System.", extra:{why:"Systemfragen, sauber erzählt – politisch und spannend."}, rating10:8.7 },
+      { title:"West Cork", publisher:"yarn.fm / Audible", episodes:14, length:"~10–12 h", lang:"EN", year:2018,
+        link:"https://www.westcorkpodcast.com/",
+        blurb:"Irischer Mordfall mit enormer Tiefe.", extra:{why:"Immersiv & cinematic – perfekte Langstrecke."}, rating10:8.8 },
+      { title:"Bundyville (S1)", publisher:"OPB / Longreads", episodes:7, length:"~5–6 h", lang:"EN", year:2018,
+        link:"https://open.spotify.com/show/5fqTMhGPFmUnUvkM8tjKy2",
+        blurb:"Milizen, Radikalisierung, US-Extremismus.", extra:{why:"Kontext jenseits von Mordfällen – ruhig & präzise."}, rating10:8.4 },
+      { title:"The Retrievals", publisher:"Serial / NYT", episodes:5, length:"~3.5–4 h", lang:"EN", year:2023,
+        link:"https://open.spotify.com/show/6EvG4iL7sOi8L4UrzLopmE",
+        blurb:"Schockierender Klinik-Skandal.", extra:{why:"Kurz, heftig, präzise – ideal als kompakte Staffel."}, rating10:8.9 },
+      { title:"The Pirate of Prague", publisher:"Apple Original / Blanchard House", episodes:8, length:"~6–7 h", lang:"EN", year:2024,
+        link:"https://open.spotify.com/show/3EizLVw7DGAmcEUDGbvH4K",
+        blurb:"Hochglanz-Betrug in Europa – Kino für die Ohren.", extra:{why:"Du magst High-stakes-Heist-Vibes – sehr produzierter Sound."}, rating10:8.4 },
+      { title:"Cui Bono: WTF happened to Ken Jebsen?", publisher:"Undone / rbb / NDR", episodes:6, length:"~5 h", lang:"DE", year:2021,
+        link:"https://www.ardaudiothek.de/serie/cui-bono-wtf-happened-to-ken-jebsen/91898144/",
+        blurb:"Radikalisierung & Desinformation – deutsches Referenzstück.", extra:{why:"Medienmechanik & Plattformlogik – glasklar, packend."}, rating10:9.0 },
+      { title:"Cui Bono: Wer hat Angst vorm Drachenlord?", publisher:"Undone / rbb / NDR", episodes:5, length:"~4 h", lang:"DE", year:2023,
+        link:"https://www.ardaudiothek.de/sendung/cui-bono-wer-hat-angst-vorm-drachenlord/12388430/",
+        blurb:"Internet-Mob, Verantwortung, Medien – sauber aufgerollt.", extra:{why:"Du interessierst dich für Netzkultur & Verantwortung – Pflichtstoff."}, rating10:8.7 },
+      { title:"Wirecard: 1,9 Milliarden Lügen", publisher:"SZ / Spotify Studios", episodes:6, length:"~4–5 h je Staffel", lang:"DE", year:2020,
+        link:"https://open.spotify.com/show/5JYitG4bOM3sVmAQRdX1Na",
+        blurb:"Der größte Wirtschaftsskandal der Republik.", extra:{why:"True-Crime-Gefühl in Wirtschaft – sehr sauber produziert."}, rating10:8.5 },
+      { title:"WHITE – Geständnis eines Neonazis", publisher:"DIE ZEIT", episodes:9, length:"~6–7 h", lang:"DE", year:2024,
+        link:"https://open.spotify.com/show/4yWhbG5VDqdhuyI2uwB0iq",
+        blurb:"Aussteiger-Story kippt in Mordgeständnis.", extra:{why:"Harte Kost, hochprofessionell – du magst es substanziell."}, rating10:8.8 },
+      { title:"Irma. Das Kind aus Srebrenica", publisher:"DIE ZEIT", episodes:5, length:"~4 h", lang:"DE", year:2025,
+        link:"https://open.spotify.com/show/6jKJACGxFXgs4KvyVvy1RJ",
+        blurb:"Krieg, Trauma, Wiederbegegnung – aufwühlend.", extra:{why:"Relevanz & Empathie – kurze, starke Staffel."}, rating10:8.6 },
+      { title:"Agenten der Angst – Fereydoun …", publisher:"NDR / ARD", episodes:6, length:"~4–5 h", lang:"DE", year:2024,
+        link:"https://open.spotify.com/show/7HMTeDbaeRAMlcrjjgVqPP",
+        blurb:"Iranischer Geheimdienst, Exil, politischer Mord.", extra:{why:"Geopolitik klar erzählt – perfekt portioniert."}, rating10:8.4 },
+      { title:"Seelenfänger – Der Anastasia-Kult", publisher:"MDR", episodes:6, length:"~4–5 h", lang:"DE", year:2022,
+        link:"https://open.spotify.com/show/3qZbfNLy2QSBnW8akCImx0",
+        blurb:"Esoterik trifft Rechtsaußen – gut belegt.", extra:{why:"Gesellschaftliche Relevanz, ohne Sensationsdrang – dein Ding."}, rating10:8.3 },
+      { title:"Dark Matters – Geheimnisse der Geheimdienste", publisher:"rbb / SWR", episodes:10, length:"staffelweise ~3–4 h", lang:"DE", year:2022,
+        link:"https://open.spotify.com/show/0OGus2Zbl5Fb8yw5MKOrzC",
+        blurb:"Echte Fälle, nüchtern erklärt – pick dir eine Staffel.", extra:{why:"Geheimdienst-Fälle ohne Hype – klar strukturiert."}, rating10:8.0 },
+      { title:"NDA – Geschichten, die nicht erzählt werden sollen", publisher:"DER SPIEGEL / Undone", episodes:6, length:"~4–5 h", lang:"DE", year:2024,
+        link:"https://open.spotify.com/show/5pkyDwEoGrPjIonuLJEyNE",
+        blurb:"Macht, Schweigen, NDAs – investigativ.", extra:{why:"Aktuelle Missstände nachvollziehbar erklärt – hoher Produktionswert."}, rating10:8.4 },
+      { title:"Judging Amanda Knox", publisher:"Undone / DER SPIEGEL", episodes:8, length:"~5–6 h", lang:"EN/DE", year:2024,
+        link:"https://open.spotify.com/show/4Pr2Zcq6Nv3hKFcbz6nnLd",
+        blurb:"Medien, Justiz, Wahrnehmung – neu aufgerollt.", extra:{why:"Du willst Meta-Ebene & Fallanalyse – sauber erzählt."}, rating10:8.5 },
+      { title:"Deep Doku", publisher:"rbb", episodes:100, length:"30–60 min je Folge", lang:"DE", year:2020,
+        link:"https://open.spotify.com/show/0k6WIgcgSa00J6RtMquN8i",
+        blurb:"Milieus, Menschen, Nahaufnahmen – pick & play.", extra:{why:"Für Strecken ohne Bock auf lange Arcs – flexibel dosierbar."}, rating10:8.2 },
+      { title:"Terror am OEZ – 5 Jahre nach dem Anschlag", publisher:"SZ / Spotify Studios", episodes:6, length:"~4–5 h", lang:"DE", year:2021,
+        link:"https://open.spotify.com/show/2McX5GBmZ6TKIqOZT41ahB",
+        blurb:"Rekonstruktion eines rechten Anschlags.", extra:{why:"Sachlich, eindringlich – wichtig, gut produziert."}, rating10:8.4 },
+    ];
+
+    // Musik: vorhandene Hip-Hop/Deutschrap aus vorher + NEUE GENRES (mit Spotify-Links; wenn unsicher → saubere Such-URL)
+    // Struktur: {year, artist, album, genre, link, blurb?, why?}
+    const MUSIC = [
+      // Hip-Hop / Rap (chronologisch)
+      {year:1987, artist:"Eric B. & Rakim", album:"Paid in Full", genre:"Hip-Hop / Rap",
+        link:"https://open.spotify.com/album/2xTftsH57QWI4P1S48dE1b",
+        blurb:"Sample-Rap-Blaupause, flowtechnisch wegweisend.", why:"Du magst Fundamentals & klare Grooves auf der Fahrt."},
+      {year:1992, artist:"Dr. Dre", album:"The Chronic", genre:"Hip-Hop / Rap",
+        link:"https://open.spotify.com/search/Dr.%20Dre%20The%20Chronic",
+        blurb:"G-Funk-Template, smoother Westcoast-Sound.", why:"Laidback Tempo für lange Abschnitte."},
+      {year:1994, artist:"Nas", album:"Illmatic", genre:"Hip-Hop / Rap",
+        link:"https://open.spotify.com/album/3kEtdS2pH6hKcMU9Wioob1",
+        blurb:"Konzise, jede Zeile sitzt – East-Coast-Blueprint.", why:"Kurz & fokussiert – kein Skip."},
+      {year:1998, artist:"OutKast", album:"Aquemini", genre:"Hip-Hop / Rap",
+        link:"https://open.spotify.com/intl-de/album/5rAKpmOCOjMwkMjBpTGVQw",
+        blurb:"Funk, Soul, Rap – warm & visionär.", why:"Groove + Storytelling – perfekte Fahrmusik."},
+      {year:2010, artist:"Kanye West", album:"My Beautiful Dark Twisted Fantasy", genre:"Hip-Hop / Rap",
+        link:"https://open.spotify.com/album/20r762YmB5HeofjMCiPMLv",
+        blurb:"Opulent & detailverliebt.", why:"Große Bögen halten dich wach."},
+      {year:2015, artist:"Kendrick Lamar", album:"To Pimp a Butterfly", genre:"Hip-Hop / Rap",
+        link:"https://open.spotify.com/album/7ycBtnsMtyVbbwTfJwRjSP",
+        blurb:"Jazz, Funk, Politik – maximal ambitioniert.", why:"Anspruch + Drive – filmisch."},
+
+      // Bonus: Deutschrap (chronologisch)
+      {year:1997, artist:"Freundeskreis", album:"Quadratur des Kreises", genre:"Deutschrap",
+        link:"https://open.spotify.com/search/Freundeskreis%20Quadratur%20des%20Kreises",
+        blurb:"Conscious-Rap-Klassiker.", why:"Clever, entspannt – gute Reisetaktung."},
+      {year:1998, artist:"Beginner", album:"Bambule", genre:"Deutschrap",
+        link:"https://open.spotify.com/search/Beginner%20Bambule",
+        blurb:"Hamburger Schule des Rap – lässig & präzise.", why:"Locker, aber treibend."},
+      {year:2014, artist:"Haftbefehl", album:"Russisch Roulette", genre:"Deutschrap",
+        link:"https://open.spotify.com/search/Haftbefehl%20Russisch%20Roulette",
+        blurb:"Straßenpoesie & Slang-Ikonen.", why:"Dichte Bilder, hohes Energielevel."},
+      {year:2017, artist:"Trettmann", album:"DIY", genre:"Deutschrap",
+        link:"https://open.spotify.com/search/Trettmann%20DIY",
+        blurb:"Cloud-Dancehall, eisig & elegant.", why:"Minimal & effektiv für Nachtfahrten."},
+
+      // R&B / Soul / Funk
+      {year:1971, artist:"Marvin Gaye", album:"What’s Going On", genre:"R&B / Soul / Funk",
+        link:"https://open.spotify.com/album/2v7KXdgY9Nk5rVSTx1RxlC",
+        blurb:"Sozial, warm, zeitlos.", why:"Gleichmäßiger Puls – entspanntes Cruisen."},
+      {year:1973, artist:"Stevie Wonder", album:"Innervisions", genre:"R&B / Soul / Funk",
+        link:"https://open.spotify.com/album/3kWb6C4qS0bG1BK8WqZQj3",
+        blurb:"Groove + Synth-Innovationen.", why:"Fahrfreude durch Rhythmus-Schübe."},
+      {year:1984, artist:"Prince", album:"Purple Rain", genre:"R&B / Soul / Funk",
+        link:"https://open.spotify.com/album/7nXJ5k4XgRj5OLg9m8V3zc",
+        blurb:"Pop-Funk-Dringlichkeit.", why:"Große Hooks = Wachmacher."},
+      {year:2000, artist:"D’Angelo", album:"Voodoo", genre:"R&B / Soul / Funk",
+        link:"https://open.spotify.com/album/30zBPtVITQISm6CLx7rmb6",
+        blurb:"Neo-Soul-Referenz, tiefes Pocket.", why:"Night-drive-Groove, rollt."},
+      {year:2012, artist:"Frank Ocean", album:"Channel Orange", genre:"R&B / Soul / Funk",
+        link:"https://open.spotify.com/album/392p3shh2jkxUxY2VHvlH8",
+        blurb:"Modernes Storytelling im R&B.", why:"Abwechslungsreich ohne Hektik."},
+      {year:2017, artist:"SZA", album:"Ctrl", genre:"R&B / Soul / Funk",
+        link:"https://open.spotify.com/album/76290XdXVF9rPzGdNRWdCh",
+        blurb:"Zeitgeist-R&B, intim & klar.", why:"Sanft, aber fokussiert."},
+
+      // Pop
+      {year:1969, artist:"The Beatles", album:"Abbey Road", genre:"Pop",
+        link:"https://open.spotify.com/album/0ETFjACtuP2ADo6LFhL6HN",
+        blurb:"Songwriting-Meisterklasse.", why:"Sequencing hält die Spannung."},
+      {year:1982, artist:"Michael Jackson", album:"Thriller", genre:"Pop",
+        link:"https://open.spotify.com/album/2ANVost0y2y52ema1E9xAZ",
+        blurb:"Pop-Perfektion, Hit an Hit.", why:"Energie für müde Etappen."},
+      {year:1989, artist:"Madonna", album:"Like a Prayer", genre:"Pop",
+        link:"https://open.spotify.com/search/Madonna%20Like%20a%20Prayer",
+        blurb:"Ikonische Hooks + Haltung.", why:"Tempo + Nostalgie pushen."},
+      {year:2010, artist:"Robyn", album:"Body Talk", genre:"Pop",
+        link:"https://open.spotify.com/search/Robyn%20Body%20Talk",
+        blurb:"Euphorischer Electropop.", why:"Drive, ohne zu stressen."},
+      {year:2014, artist:"Taylor Swift", album:"1989", genre:"Pop",
+        link:"https://open.spotify.com/album/34OkZVpuzBa9y40DCy0LPR",
+        blurb:"Neon-Pop mit Top-Hooks.", why:"Konstant hohe Aufmerksamkeit."},
+      {year:2020, artist:"Dua Lipa", album:"Future Nostalgia", genre:"Pop",
+        link:"https://open.spotify.com/album/4KwrP8C2TqfH2p7T3WkN3E",
+        blurb:"Disco-Revival, knochentrocken produziert.", why:"Gute Laune für Stau."},
+
+      // Rock / Alternative / Indie
+      {year:1967, artist:"The Velvet Underground & Nico", album:"The Velvet Underground & Nico", genre:"Rock / Alternative / Indie",
+        link:"https://open.spotify.com/album/5gznATMVO85ZcLTkE9ULU7",
+        blurb:"Kunst/Noise trifft Pop.", why:"Dynamikwechsel halten wach."},
+      {year:1971, artist:"Led Zeppelin", album:"IV", genre:"Rock / Alternative / Indie",
+        link:"https://open.spotify.com/album/5EyIDBAqhnlkAHqvPRwdbX",
+        blurb:"Hardrock-Grundstein.", why:"Riffs = Energie-Boosts."},
+      {year:1977, artist:"Fleetwood Mac", album:"Rumours", genre:"Rock / Alternative / Indie",
+        link:"https://open.spotify.com/album/1bt6q2SruMsBtcerNVtpZB",
+        blurb:"Kohärente Popsongs, perfekt sequenziert.", why:"Angenehme Konstanz."},
+      {year:1991, artist:"Nirvana", album:"Nevermind", genre:"Rock / Alternative / Indie",
+        link:"https://open.spotify.com/album/2guirTSEqLizK7j9i1MTTZ",
+        blurb:"Grunge-Erdrutsch.", why:"Schub für monotone Strecken."},
+      {year:1997, artist:"Radiohead", album:"OK Computer", genre:"Rock / Alternative / Indie",
+        link:"https://open.spotify.com/album/6dVIqQ8qmQ5GBnJ9shOYGE",
+        blurb:"Zukunfts-Rock, detailreich.", why:"Langstrecken-Kopf-Kino."},
+      {year:2001, artist:"The Strokes", album:"Is This It", genre:"Rock / Alternative / Indie",
+        link:"https://open.spotify.com/album/2yNaksHgeMQM9QpEB7DT3C",
+        blurb:"Garage-Pop mit Hooks.", why:"Leicht, direkt, fahrbar."},
+
+      // Electronic (House / Techno / Ambient)
+      {year:1977, artist:"Kraftwerk", album:"Trans-Europe Express", genre:"Electronic",
+        link:"https://open.spotify.com/album/1vANZV20H5B4Fk6yf7Ot9a",
+        blurb:"Europäischer Puls, minimal.", why:"Tempokonstanz, perfekt für Autobahn."},
+      {year:1992, artist:"Aphex Twin", album:"Selected Ambient Works 85–92", genre:"Electronic",
+        link:"https://open.spotify.com/album/7s0lDK7y3XLmI7tcsRAbW0",
+        blurb:"Ambient/Techno-Referenz.", why:"Fokus ohne Monotonie."},
+      {year:1998, artist:"Massive Attack", album:"Mezzanine", genre:"Electronic",
+        link:"https://open.spotify.com/album/49MNmJhZQewjt06rpwp6QR",
+        blurb:"Trip-Hop-Schwärze.", why:"Nachts: tief, aber klar."},
+      {year:2001, artist:"Daft Punk", album:"Discovery", genre:"Electronic",
+        link:"https://open.spotify.com/album/2noRn2Aes5aoNVsU6iWThc",
+        blurb:"Filter-House-Feuerwerk.", why:"Gute Laune, gleichmäßiger Drive."},
+      {year:2007, artist:"Burial", album:"Untrue", genre:"Electronic",
+        link:"https://open.spotify.com/album/4Gfnly5CzMJQqkUFfoHaP3",
+        blurb:"UK-Bass als Nachtnebel.", why:"Konzentrierter Tunnelblick."},
+      {year:2013, artist:"Jon Hopkins", album:"Immunity", genre:"Electronic",
+        link:"https://open.spotify.com/album/7qQJQ3YOTQG2zWfL4QxX7g",
+        blurb:"Kammermusik für Clubs.", why:"Hypnotische Motorik."},
+
+      // Jazz
+      {year:1959, artist:"Miles Davis", album:"Kind of Blue", genre:"Jazz",
+        link:"https://open.spotify.com/album/1weenld61qoidwYuZ1GESA",
+        blurb:"Modal-Cool, zeitlos.", why:"Entspannt, aber klar."},
+      {year:1965, artist:"John Coltrane", album:"A Love Supreme", genre:"Jazz",
+        link:"https://open.spotify.com/album/6f6tko6NWoH1ajy3l5kL8g",
+        blurb:"Spirituelle Suite.", why:"Zusammenhängend, fokussiert."},
+      {year:1973, artist:"Herbie Hancock", album:"Head Hunters", genre:"Jazz",
+        link:"https://open.spotify.com/album/4YyZJ8d4xQw77aXy8utu8E",
+        blurb:"Jazz-Funk-Grooves.", why:"Fährt im Loop perfekt."},
+      {year:1975, artist:"Keith Jarrett", album:"The Köln Concert", genre:"Jazz",
+        link:"https://open.spotify.com/album/4pFZtQ8F2LkZ2MN2A1tZci",
+        blurb:"Impro-Piano als Reise.", why:"Langform, meditative Spannung."},
+      {year:1977, artist:"Weather Report", album:"Heavy Weather", genre:"Jazz",
+        link:"https://open.spotify.com/album/7lPoGKpIPAABUu6kq0rO9H",
+        blurb:"Fusion-Klassiker.", why:"Bewegte Texturen halten wach."},
+      {year:2015, artist:"Kamasi Washington", album:"The Epic", genre:"Jazz",
+        link:"https://open.spotify.com/album/5l3zEm5Y1h0dT3fLJb4s4D",
+        blurb:"Monumental, filmisch.", why:"Große Bögen für lange Etappen."},
+
+      // Klassik & Minimal
+      {year:1720, artist:"J. S. Bach", album:"Cello-Suiten (z. B. Yo-Yo Ma)", genre:"Klassik & Minimal",
+        link:"https://open.spotify.com/search/Bach%20Cello-Suiten%20Yo-Yo%20Ma",
+        blurb:"Reduktion & Form.", why:"Klarer Kopf, feine Dynamik."},
+      {year:1812, artist:"Beethoven", album:"Sinfonie Nr. 7 (Kleiber/VPO)", genre:"Klassik & Minimal",
+        link:"https://open.spotify.com/search/Beethoven%207%20Kleiber%20Wiener%20Philharmoniker",
+        blurb:"Rhythmische Triebkraft.", why:"Energie ohne Hektik."},
+      {year:1905, artist:"Debussy", album:"La mer", genre:"Klassik & Minimal",
+        link:"https://open.spotify.com/search/Debussy%20La%20mer",
+        blurb:"Impressionistische Farbpalette.", why:"Landschaft passt zur Straße."},
+      {year:1913, artist:"Strawinsky", album:"Le sacre du printemps", genre:"Klassik & Minimal",
+        link:"https://open.spotify.com/search/Stravinsky%20Le%20sacre%20du%20printemps",
+        blurb:"Urgewalt, Rhythmus.", why:"Aufmerksamkeitsschub."},
+      {year:1982, artist:"Philip Glass", album:"Glassworks", genre:"Klassik & Minimal",
+        link:"https://open.spotify.com/search/Philip%20Glass%20Glassworks",
+        blurb:"Minimal Music als Motor.", why:"Motorik = Fokus."},
+      {year:2015, artist:"Max Richter", album:"Sleep", genre:"Klassik & Minimal",
+        link:"https://open.spotify.com/album/0YZI0XfC6vF3RDeo63HgNb",
+        blurb:"Acht Stunden Ruhe.", why:"Nur für Mitfahrer, nicht Fahrer 😉"},
+
+      // Singer-Songwriter / Folk
+      {year:1965, artist:"Bob Dylan", album:"Highway 61 Revisited", genre:"Singer-Songwriter / Folk",
+        link:"https://open.spotify.com/album/6YabPKtZAjxwyWbuO9p4ZD",
+        blurb:"Elektrifizierte Poesie.", why:"Text & Tempo balanciert."},
+      {year:1967, artist:"Leonard Cohen", album:"Songs of Leonard Cohen", genre:"Singer-Songwriter / Folk",
+        link:"https://open.spotify.com/album/0HZkQb0d1cwZ2cR2WYZhJ8",
+        blurb:"Karge Eleganz.", why:"Ruhig, aber nicht schläfrig."},
+      {year:1971, artist:"Joni Mitchell", album:"Blue", genre:"Singer-Songwriter / Folk",
+        link:"https://open.spotify.com/album/1vz94WpXDVYIEGja8cjFNa",
+        blurb:"Intim & melodisch.", why:"Sanfter Flow für freie Bahn."},
+      {year:1972, artist:"Nick Drake", album:"Pink Moon", genre:"Singer-Songwriter / Folk",
+        link:"https://open.spotify.com/album/6E7QpHY8Xli1P2bJxJrB1f",
+        blurb:"Kurz, kristallklar.", why:"Kompakt für Teilstrecken."},
+      {year:1997, artist:"Elliott Smith", album:"Either/Or", genre:"Singer-Songwriter / Folk",
+        link:"https://open.spotify.com/album/1A2um0A3xpe3dke6M6vP2z",
+        blurb:"Flüsternde Melancholie.", why:"Leicht & fokussiert."},
+      {year:2020, artist:"Phoebe Bridgers", album:"Punisher", genre:"Singer-Songwriter / Folk",
+        link:"https://open.spotify.com/album/6Pp6qGEywDdofgFC1oFbSH",
+        blurb:"Indie-Folk zeitgemäß.", why:"Atmosphäre, nicht schläfrig."},
+
+      // Reggae / Dub
+      {year:1973, artist:"The Wailers", album:"Catch a Fire", genre:"Reggae / Dub",
+        link:"https://open.spotify.com/album/1C0Z5i4ZJX4QJpD6K8HjE9",
+        blurb:"Wärme + Groove.", why:"Entspanntes, stetiges Tempo."},
+      {year:1975, artist:"Burning Spear", album:"Marcus Garvey", genre:"Reggae / Dub",
+        link:"https://open.spotify.com/album/5V4qKqRR3YKHyCuXapnwXC",
+        blurb:"Roots-Ernsthaftigkeit.", why:"Gleichmäßiger Puls."},
+      {year:1976, artist:"Augustus Pablo", album:"King Tubby Meets Rockers Uptown", genre:"Reggae / Dub",
+        link:"https://open.spotify.com/album/1wQmP7FpC18m0tHbdDg14Q",
+        blurb:"Dub-Tiefe.", why:"Bass beruhigt, macht wach."},
+      {year:1977, artist:"Bob Marley & The Wailers", album:"Exodus", genre:"Reggae / Dub",
+        link:"https://open.spotify.com/album/7vX1cGx6lQF9bH8V1fDk3f",
+        blurb:"Welthits + Spiritualität.", why:"Feelgood für Stau."},
+      {year:1978, artist:"Steel Pulse", album:"Handsworth Revolution", genre:"Reggae / Dub",
+        link:"https://open.spotify.com/search/Steel%20Pulse%20Handsworth%20Revolution",
+        blurb:"UK-Reggae-Kante.", why:"Frisch, rhythmisch."},
+      {year:1981, artist:"Black Uhuru", album:"Red", genre:"Reggae / Dub",
+        link:"https://open.spotify.com/album/0gq7Q8oX2xZfX9VZ6vO0aZ",
+        blurb:"Dunkler, treibender Roots.", why:"Stetig, fokussiert."},
+
+      // Latin / World / Afrobeat
+      {year:1968, artist:"Various", album:"Tropicália: ou Panis et Circensis", genre:"Latin / World / Afrobeat",
+        link:"https://open.spotify.com/search/Tropicalia%20ou%20Panis%20et%20Circensis",
+        blurb:"Brazil 60s Avant-Pop.", why:"Bunt, aber geordnet."},
+      {year:1976, artist:"Fela Kuti", album:"Zombie", genre:"Latin / World / Afrobeat",
+        link:"https://open.spotify.com/album/0lHkmM8Y8a9kaGbRZqZ2wI",
+        blurb:"Afrobeat-Uhrwerk.", why:"Motorische Polyrhythmik."},
+      {year:1997, artist:"Buena Vista Social Club", album:"Buena Vista Social Club", genre:"Latin / World / Afrobeat",
+        link:"https://open.spotify.com/album/3T4tUhGYeRNVUGevb0wThu",
+        blurb:"Kubanische Eleganz.", why:"Leicht, melodisch, hell."},
+      {year:1998, artist:"Manu Chao", album:"Clandestino", genre:"Latin / World / Afrobeat",
+        link:"https://open.spotify.com/album/1CAViGZQy1S4O0c2Vq6N9t",
+        blurb:"Weltpop-Mosaik.", why:"Lässig, vielseitig."},
+      {year:2004, artist:"Tinariwen", album:"Amassakoul", genre:"Latin / World / Afrobeat",
+        link:"https://open.spotify.com/search/Tinariwen%20Amassakoul",
+        blurb:"Wüsten-Blues-Trance.", why:"Hypnotischer Cruise."},
+      {year:2018, artist:"Rosalía", album:"El Mal Querer", genre:"Latin / World / Afrobeat",
+        link:"https://open.spotify.com/album/355bjCHzRJztCzaG5Za4gq",
+        blurb:"Flamenco-Pop-Neudenke.", why:"Rhythmus-Frische."},
+
+      // Metal / Punk
+      {year:1970, artist:"Black Sabbath", album:"Paranoid", genre:"Metal / Punk",
+        link:"https://open.spotify.com/album/6r7LZXAVueS5DqdrvXJJK7",
+        blurb:"Riff-Erbe pur.", why:"Adrenalin gegen Müdigkeit."},
+      {year:1976, artist:"Ramones", album:"Ramones", genre:"Metal / Punk",
+        link:"https://open.spotify.com/album/6wPXUmYwVarW5mh5KxVZlS",
+        blurb:"1-2-3-4 Essenz.", why:"Kurz, direkt, wach."},
+      {year:1982, artist:"Iron Maiden", album:"The Number of the Beast", genre:"Metal / Punk",
+        link:"https://open.spotify.com/album/5XcZRgJv3zMhTqCyESjQrF",
+        blurb:"NWOBHM-Speerspitze.", why:"Tempo + Dringlichkeit."},
+      {year:1986, artist:"Metallica", album:"Master of Puppets", genre:"Metal / Punk",
+        link:"https://open.spotify.com/album/2Lq2qX3hYhiuPckC8Flj21",
+        blurb:"Thrash-Präzision.", why:"Aggro-Fokus bei Müdigkeit."},
+      {year:1992, artist:"Rage Against the Machine", album:"Rage Against the Machine", genre:"Metal / Punk",
+        link:"https://open.spotify.com/album/4LaRYkT4oy47wEuUgZFUjl",
+        blurb:"Rap-Rock-Dynamit.", why:"Groove + Wut = Wach."},
+      {year:2001, artist:"System of a Down", album:"Toxicity", genre:"Metal / Punk",
+        link:"https://open.spotify.com/album/6jWde94ln40epKIQCd8XUh",
+        blurb:"Hyper-dynamisch.", why:"Umschalt-Wachmacher."},
+
+      // Soundtracks / Scores
+      {year:1966, artist:"Ennio Morricone", album:"The Good, the Bad and the Ugly", genre:"Soundtracks / Scores",
+        link:"https://open.spotify.com/search/Morricone%20The%20Good%20the%20Bad%20and%20the%20Ugly%20OST",
+        blurb:"Italo-Western-Ikone.", why:"Cinematic Weite."},
+      {year:1982, artist:"Vangelis", album:"Blade Runner", genre:"Soundtracks / Scores",
+        link:"https://open.spotify.com/search/Vangelis%20Blade%20Runner%20Soundtrack",
+        blurb:"Synth-Nacht-Noir.", why:"Perfekt für Autobahn nachts."},
+      {year:2000, artist:"Tan Dun", album:"Crouching Tiger, Hidden Dragon", genre:"Soundtracks / Scores",
+        link:"https://open.spotify.com/search/Tan%20Dun%20Crouching%20Tiger%20Hidden%20Dragon%20Soundtrack",
+        blurb:"Asien-Kammermusik-Blend.", why:"Ruhe + Spannung."},
+      {year:2010, artist:"Hans Zimmer", album:"Inception", genre:"Soundtracks / Scores",
+        link:"https://open.spotify.com/album/2PqknqiPsuj1Z9dF8i8b5S",
+        blurb:"Braam & Puls.", why:"Motorik + Fokus."},
+      {year:2010, artist:"Trent Reznor & Atticus Ross", album:"The Social Network", genre:"Soundtracks / Scores",
+        link:"https://open.spotify.com/album/2RXYomZ7XK4v8uKXG4P2oC",
+        blurb:"Synth-Minimalismus.", why:"Konzentrierter Flow."},
+      {year:2016, artist:"Jóhann Jóhannsson", album:"Arrival", genre:"Soundtracks / Scores",
+        link:"https://open.spotify.com/album/6f1rG6xVxN7HxVh9Yx8RJH",
+        blurb:"Zeit/Sprach-Ambient.", why:"Nachdenklicher Cruise."},
+    ];
+
+    // ========= Chips =========
+    const POD_CHIPS = ["DE", "EN", "< 6 h", "6–9 h", "> 9 h", "Neu (2024/25)"];
+    const MUS_GENRES = [...new Set(MUSIC.map(m => m.genre))];
+
+    // ========= State =========
+    let currentTab = "podcasts"; // 'podcasts' | 'music'
+    let query = "";
+    let activePodChips = new Set();
+    let activeGenres = new Set();
+
+    // ========= DOM =========
+    const $ = s => document.querySelector(s);
+    const listEl = $("#list");
+    const searchEl = $("#search");
+    const countEl = $("#count");
+    const chipsPod = $("#chipsPod");
+    const chipsMus = $("#chipsMus");
+    const tabPod = $("#tabPod");
+    const tabMus = $("#tabMus");
+    const genreHint = $("#genreHint");
+
+    // ========= Utils =========
+    function makeChip(label, active, onClick){
+      const b = document.createElement("button");
+      b.className = "chip px-3 py-1 rounded-full border text-sm " + (active ? "bg-[var(--accent)] text-black border-transparent" : "bg-white/5 text-white border-white/30 hover:border-white");
+      b.textContent = label;
+      b.onclick = onClick;
+      return b;
+    }
+
+    function scoreBar(value){
+      if(value == null) return "—";
+      const v = Math.max(0, Math.min(10, value));
+      const full = Math.round(v);
+      return `<div class="flex items-center gap-1" aria-label="Bewertung ${v}/10">
+        ${Array.from({length:10}).map((_,i)=>`<div class="h-2 w-5 rounded ${i<full?'bg-[var(--accent)]':'bg-white/10'}"></div>`).join("")}
+        <span class="ml-2 text-xs text-white/70">${v.toFixed(1)} / 10</span>
+      </div>`;
+    }
+
+    function cardHTML({id, title, meta, blurb, rating, details, link}){
+      const hasDetails = details && Object.keys(details).length;
+      return `
+      <article id="${id}" class="card relative rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.9)] overflow-hidden">
+        <button class="w-full text-left p-5 block">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h3 class="text-lg font-semibold leading-tight text-white hover:text-[var(--accent)] transition">${title}</h3>
+              <p class="text-sm text-white/70">${meta}</p>
+            </div>
+          </div>
+          ${blurb ? `<p class="mt-3 text-[15px] leading-relaxed">${blurb}</p>` : ""}
+          <div class="mt-3">${scoreBar(rating)}</div>
+        </button>
+        <div class="drop">
+          <div class="border-t border-white/10 bg-black/30 p-4 text-sm">
+            ${
+              hasDetails ? Object.entries(details).map(([k,v]) => {
+                const label = k==="release"?"Release":k==="producers"?"Produktion":k==="keyTracks"?"Key Tracks":k==="awards"?"Awards":k==="why"?"Warum für dich":k;
+                const val = Array.isArray(v) ? v.join(", ") : v;
+                return `<p><span style="color:${ACCENT}">${label}:</span> ${val}</p>`;
+              }).join("") : ""
+            }
+            ${link ? `<a href="${link}" target="_blank" rel="noreferrer noopener" class="mt-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-[var(--accent)] text-black px-3 py-1 text-xs hover:brightness-110">Auf Spotify öffnen</a>` : ""}
+          </div>
+        </div>
+      </article>`;
+    }
+
+    function render(){
+      // chips
+      chipsPod.innerHTML = "";
+      chipsMus.innerHTML = "";
+      if(currentTab==="podcasts"){
+        POD_CHIPS.forEach(label=>{
+          const active = activePodChips.has(label);
+          chipsPod.appendChild(makeChip(label, active, ()=>{
+            if(active) activePodChips.delete(label); else activePodChips.add(label);
+            render();
+          }));
+        });
+        chipsPod.classList.remove("hidden");
+        chipsMus.classList.add("hidden");
+        genreHint.classList.add("hidden");
+      } else {
+        MUS_GENRES.forEach(genre=>{
+          const active = activeGenres.has(genre);
+          chipsMus.appendChild(makeChip(genre, active, ()=>{
+            if(active) activeGenres.delete(genre); else activeGenres.add(genre);
+            render();
+          }));
+        });
+        chipsPod.classList.add("hidden");
+        chipsMus.classList.remove("hidden");
+        genreHint.classList.remove("hidden");
+      }
+
+      // list
+      const q = query.trim().toLowerCase();
+      let rows = [];
+      if(currentTab==="podcasts"){
+        const mapped = PODCASTS.map(p=>({
+          ...p,
+          bucket: (p.length.includes("3")||p.length.includes("4")||p.length.includes("5")) ? "< 6 h" : ((p.length.includes("10")||p.length.includes("12"))?"> 9 h":"6–9 h"),
+          fresh: p.year>=2024 ? "Neu (2024/25)" : "Alt/klassisch"
+        }));
+        const filtered = mapped.filter(p=>{
+          const hit = p.title.toLowerCase().includes(q) || p.publisher.toLowerCase().includes(q) || (p.blurb||"").toLowerCase().includes(q);
+          const tags = [p.lang, p.bucket, p.fresh];
+          const tagOk = activePodChips.size===0 || [...activePodChips].every(t=>tags.includes(t));
+          return hit && tagOk;
+        });
+        rows = filtered.map(p=>cardHTML({
+          id:`p-${encodeURIComponent(p.title)}`,
+          title:p.title,
+          meta:`${p.publisher} · ${p.episodes} Folgen · ${p.length} · ${p.lang} · ${p.year}`,
+          blurb:p.blurb,
+          rating:p.rating10,
+          details:p.extra,
+          link:p.link
+        }));
+      } else {
+        const filtered = MUSIC.filter(m=>{
+          const hit = m.artist.toLowerCase().includes(q) || m.album.toLowerCase().includes(q) || (m.genre||"").toLowerCase().includes(q);
+          const genreOk = activeGenres.size===0 || activeGenres.has(m.genre);
+          return hit && genreOk;
+        }).sort((a,b)=>a.year-b.year || a.artist.localeCompare(b.artist));
+        rows = filtered.map(m=>cardHTML({
+          id:`m-${m.genre}-${m.year}-${encodeURIComponent(m.artist)}-${encodeURIComponent(m.album)}`,
+          title:`${m.artist} — ${m.album}`,
+          meta:`${m.genre} · ${m.year}`,
+          blurb:m.blurb,
+          rating:undefined,
+          details:{ why:m.why },
+          link:m.link
+        }));
+      }
+      listEl.innerHTML = rows.join("");
+      countEl.textContent = rows.length.toString();
+
+      // toggle logic
+      listEl.querySelectorAll(".card > button").forEach(btn=>{
+        btn.onclick = (e)=>{
+          const card = e.currentTarget.parentElement;
+          const open = card.classList.contains("open");
+          listEl.querySelectorAll(".card").forEach(c=>c.classList.remove("open"));
+          if(!open) card.classList.add("open");
+        };
+      });
+    }
+
+    // ========= Events =========
+    searchEl.addEventListener("input", e=>{ query = e.target.value; render(); });
+    tabPod.onclick = ()=>{
+      currentTab="podcasts";
+      tabPod.className="px-3 py-1 rounded-full text-sm border bg-white text-black border-white";
+      tabMus.className="px-3 py-1 rounded-full text-sm border bg-transparent text-white border-white/40 hover:border-white";
+      render();
+    };
+    tabMus.onclick = ()=>{
+      currentTab="music";
+      tabMus.className="px-3 py-1 rounded-full text-sm border bg-white text-black border-white";
+      tabPod.className="px-3 py-1 rounded-full text-sm border bg-transparent text-white border-white/40 hover:border-white";
+      render();
     };
 
-    // =============================================================
-    // DATA (Complete, deduped, with covers + reasons)
-    // =============================================================
-    const PODCASTS = [
-      {
-        title: "Serial – Season 1",
-        publisher: "Serial Productions / NYT",
-        episodes: 12,
-        length: "~8.5–9 h",
-        lang: "EN",
-        year: 2014,
-        link: "https://open.spotify.com/show/5wMPFS9B5V7gg6hZ3UZ7hf",
-        cover: "https://upload.wikimedia.org/wikipedia/commons/6/69/Serial_podcast_logo.png",
-        blurb: "Storytelling-True-Crime über Adnan Syed – präzise, mit starken Wendungen.",
-        extra: { release: "2014", awards: "Peabody Award", why: "Du magst sauberes Handwerk & Dramaturgie – hält dich wach und im Flow." },
-        rating10: 9.6,
-      },
-      {
-        title: "S-Town",
-        publisher: "Serial / This American Life",
-        episodes: 7,
-        length: "~7.5 h",
-        lang: "EN",
-        year: 2017,
-        link: "https://open.spotify.com/show/1KPTM79Wn9vkWX0UoMYyrd",
-        cover: "https://stownpodcast.org/wp-content/uploads/2017/03/stown-share.jpg",
-        blurb: "Von der Recherche zum Porträt – poetisch, dicht, binge-bar.",
-        extra: { release: "2017", awards: "Peabody u. a.", why: "Du liebst Atmosphäre & Charaktertiefe – akustisches A24." },
-        rating10: 9.3,
-      },
-      { title: "In the Dark (S1)", publisher: "APM Reports", episodes: 10, length: "~8–9 h", lang: "EN", year: 2016, link: "https://open.spotify.com/show/1aFyRYDJ1pHEaPMnZAGaOr", cover: "https://upload.wikimedia.org/wikipedia/en/0/02/In_the_Dark_podcast_logo.jpg", blurb: "Investigativ zu Strafverfolgung (Curtis Flowers).", extra: { why: "Du willst Substanz & Klarheit – ideal für konzentrierte Etappen." }, rating10: 9.2 },
-      { title: "The Dropout", publisher: "ABC News", episodes: 8, length: "~6–7 h", lang: "EN", year: 2019, link: "https://open.spotify.com/show/7lrJqILWfMuQhqDHJEFUK6", cover: "https://upload.wikimedia.org/wikipedia/en/7/7b/The_Dropout_podcast.jpg", blurb: "Theranos/Elizabeth Holmes – Aufstieg, Täuschung, Prozess.", extra: { why: "Große Betrugsstory, glasklar erzählt – null Leerlauf." }, rating10: 8.9 },
-      { title: "Wind of Change", publisher: "Pineapple / Crooked", episodes: 8, length: "~6–7 h", lang: "EN", year: 2020, link: "https://open.spotify.com/show/3vikAuFxKVNe2GBZC61IYD", cover: "https://upload.wikimedia.org/wikipedia/en/9/96/Wind_of_Change_podcast.jpg", blurb: "CIA-These & Pop-Mythos – maximal unterhaltsam.", extra: { why: "Musik + Geheimdienst-Vibes – perfektes Mischgenre fürs Fahren." }, rating10: 8.6 },
-      { title: "The Missing Cryptoqueen", publisher: "BBC", episodes: 8, length: "~7–8 h", lang: "EN", year: 2019, link: "https://open.spotify.com/show/5nk7d9MLCgE3M47mXPW7MP", cover: "https://upload.wikimedia.org/wikipedia/en/e/ef/The_Missing_Cryptoqueen_podcast.jpg", blurb: "OneCoin – Milliardenbetrug, Jagd nach Ruja.", extra: { why: "Internationale Jagd + Cliffhanger – zieht gut durch." }, rating10: 8.8 },
-      { title: "Bear Brook", publisher: "NHPR", episodes: 10, length: "~8–9 h", lang: "EN", year: 2018, link: "https://open.spotify.com/show/7DmP8qi4QK5vLGZVFPfyZO", cover: "https://upload.wikimedia.org/wikipedia/en/9/9a/Bear_Brook_podcast.jpg", blurb: "Cold-Case, DNA-Revolution – Genre-prägend.", extra: { why: "Forensik + Struktur – ideal fürs Miträtseln." }, rating10: 9.0 },
-      { title: "Sweet Bobby", publisher: "Tortoise", episodes: 6, length: "~5 h", lang: "EN", year: 2021, link: "https://open.spotify.com/show/0pxg9zewLAYxhcmbJ4CL0Q", cover: "https://upload.wikimedia.org/wikipedia/en/3/33/Sweet_Bobby_podcast.jpg", blurb: "High-end Catfishing – kompakt & präzise.", extra: { why: "Moderner Social-Crime-Fall – perfekt für einen Fahrtabschnitt." }, rating10: 8.5 },
-      { title: "The Trojan Horse Affair", publisher: "Serial / NYT", episodes: 8, length: "~7 h", lang: "EN", year: 2022, link: "https://open.spotify.com/show/2isrOkJ401yfYNVDEhtdey", cover: "https://upload.wikimedia.org/wikipedia/en/0/0e/Trojan_Horse_Affair_podcast.jpg", blurb: "Ein Brief, ein Skandal, ein System.", extra: { why: "Systemfragen, sauber erzählt – politisch und spannend." }, rating10: 8.7 },
-      { title: "West Cork", publisher: "yarn.fm / Audible", episodes: 14, length: "~10–12 h", lang: "EN", year: 2018, link: "https://www.westcorkpodcast.com/", cover: "https://m.media-amazon.com/images/I/61V1t4s3cnL._SL1200_.jpg", blurb: "Irischer Mordfall mit enormer Tiefe.", extra: { why: "Immersiv & cinematic – perfekte Langstrecke." }, rating10: 8.8 },
-      { title: "Bundyville (S1)", publisher: "OPB / Longreads", episodes: 7, length: "~5–6 h", lang: "EN", year: 2018, link: "https://open.spotify.com/show/5fqTMhGPFmUnUvkM8tjKy2", cover: "https://images.squarespace-cdn.com/content/v1/5a59a9c6a9db09c2d8fb7c7b/1525291881881-3U2IYQEWQK6C6KZQ2N0N/bundyville.jpg", blurb: "Milizen, Radikalisierung, US-Extremismus.", extra: { why: "Kontext jenseits von Mordfällen – ruhig & präzise." }, rating10: 8.4 },
-      { title: "The Retrievals", publisher: "Serial / NYT", episodes: 5, length: "~3.5–4 h", lang: "EN", year: 2023, link: "https://open.spotify.com/show/6EvG4iL7sOi8L4UrzLopmE", cover: "https://upload.wikimedia.org/wikipedia/en/1/1a/The_Retrievals_podcast.jpg", blurb: "Schockierender Klinik-Skandal.", extra: { why: "Kurz, heftig, präzise – ideal als kompakte Staffel." }, rating10: 8.9 },
-      { title: "The Pirate of Prague", publisher: "Apple Original / Blanchard House", episodes: 8, length: "~6–7 h", lang: "EN", year: 2024, link: "https://open.spotify.com/show/3EizLVw7DGAmcEUDGbvH4K", cover: "https://is2-ssl.mzstatic.com/image/thumb/Podcasts116/v4/0b/1c/0a/0b1c0a1c-6aa3-3e6f-0a4a-2a18f07f2d9b/mza_12010206026781252101.png/1200x1200bb.jpg", blurb: "Hochglanz-Betrug in Europa – Kino für die Ohren.", extra: { why: "Du magst High-stakes-Heist-Vibes – sehr produzierter Sound." }, rating10: 8.4 },
-      { title: "Cui Bono: WTF happened to Ken Jebsen?", publisher: "Undone / rbb / NDR", episodes: 6, length: "~5 h", lang: "DE", year: 2021, link: "https://www.ardaudiothek.de/serie/cui-bono-wtf-happened-to-ken-jebsen/91898144/", cover: "https://www.rbb-online.de/content/dam/rbb/rbb/rbbkultur/podcasts/cui-bono-ken-jebsen/cui_bono_ken_jebsen_1400x1400.jpg.jpg/size=708x708.jpg", blurb: "Radikalisierung & Desinformation – deutsches Referenzstück.", extra: { why: "Medienmechanik & Plattformlogik – glasklar, packend." }, rating10: 9.0 },
-      { title: "Cui Bono: Wer hat Angst vorm Drachenlord?", publisher: "Undone / rbb / NDR", episodes: 5, length: "~4 h", lang: "DE", year: 2023, link: "https://www.ardaudiothek.de/sendung/cui-bono-wer-hat-angst-vorm-drachenlord/12388430/", cover: "https://bilder.rbb-online.de/content/dam/rbb/rbb/unternehmen/der_rbb/marken/cui-bono-drachenlord/2023/05/drachenlord-podcast-1400.jpg.jpg/size=708x708.jpg", blurb: "Internet-Mob, Verantwortung, Medien – sauber aufgerollt.", extra: { why: "Du interessierst dich für Netzkultur & Verantwortung – Pflichtstoff." }, rating10: 8.7 },
-      { title: "Wirecard: 1,9 Milliarden Lügen", publisher: "SZ / Spotify Studios", episodes: 6, length: "~4–5 h je Staffel", lang: "DE", year: 2020, link: "https://open.spotify.com/show/5JYitG4bOM3sVmAQRdX1Na", cover: "https://i.scdn.co/image/ab6765630000ba8adf2fdb47a1a6f99a9f7f4a6e", blurb: "Der größte Wirtschaftsskandal der Republik.", extra: { why: "True-Crime-Gefühl in Wirtschaft – sehr sauber produziert." }, rating10: 8.5 },
-      { title: "WHITE – Geständnis eines Neonazis", publisher: "DIE ZEIT", episodes: 9, length: "~6–7 h", lang: "DE", year: 2024, link: "https://open.spotify.com/show/4yWhbG5VDqdhuyI2uwB0iq", cover: "https://i.scdn.co/image/ab6765630000ba8a0e9a2a40b6d77d1a6a6a6a6a", blurb: "Aussteiger-Story kippt in Mordgeständnis.", extra: { why: "Harte Kost, hochprofessionell – du magst es substanziell." }, rating10: 8.8 },
-      { title: "Irma. Das Kind aus Srebrenica", publisher: "DIE ZEIT", episodes: 5, length: "~4 h", lang: "DE", year: 2025, link: "https://open.spotify.com/show/6jKJACGxFXgs4KvyVvy1RJ", cover: "https://i.scdn.co/image/ab6765630000ba8a111111111111111111111111", blurb: "Krieg, Trauma, Wiederbegegnung – aufwühlend.", extra: { why: "Relevanz & Empathie – kurze, starke Staffel." }, rating10: 8.6 },
-      { title: "Agenten der Angst – Fereydoun …", publisher: "NDR / ARD", episodes: 6, length: "~4–5 h", lang: "DE", year: 2024, link: "https://open.spotify.com/show/7HMTeDbaeRAMlcrjjgVqPP", cover: "https://i.scdn.co/image/ab6765630000ba8a222222222222222222222222", blurb: "Iranischer Geheimdienst, Exil, politischer Mord.", extra: { why: "Geopolitik klar erzählt – perfekt portioniert." }, rating10: 8.4 },
-      { title: "Seelenfänger – Der Anastasia-Kult", publisher: "MDR", episodes: 6, length: "~4–5 h", lang: "DE", year: 2022, link: "https://open.spotify.com/show/3qZbfNLy2QSBnW8akCImx0", cover: "https://www.mdr.de/podcast/seelenfaenger-anastasia-kult-100-resimage_v-variantBig16x9_w-1280.jpg", blurb: "Esoterik trifft Rechtsaußen – gut belegt.", extra: { why: "Gesellschaftliche Relevanz, ohne Sensationsdrang – dein Ding." }, rating10: 8.3 },
-      { title: "Dark Matters – Geheimnisse der Geheimdienste", publisher: "rbb / SWR", episodes: 10, length: "staffelweise ~3–4 h", lang: "DE", year: 2022, link: "https://open.spotify.com/show/0OGus2Zbl5Fb8yw5MKOrzC", cover: "https://i.scdn.co/image/ab6765630000ba8a333333333333333333333333", blurb: "Echte Fälle, nüchtern erklärt – pick dir eine Staffel.", extra: { why: "Geheimdienst-Fälle ohne Hype – klar strukturiert." }, rating10: 8.0 },
-      { title: "NDA – Geschichten, die nicht erzählt werden sollen", publisher: "DER SPIEGEL / Undone", episodes: 6, length: "~4–5 h", lang: "DE", year: 2024, link: "https://open.spotify.com/show/5pkyDwEoGrPjIonuLJEyNE", cover: "https://i.scdn.co/image/ab6765630000ba8a444444444444444444444444", blurb: "Macht, Schweigen, NDAs – investigativ.", extra: { why: "Aktuelle Missstände nachvollziehbar erklärt – hoher Produktionswert." }, rating10: 8.4 },
-      { title: "Judging Amanda Knox", publisher: "Undone / DER SPIEGEL", episodes: 8, length: "~5–6 h", lang: "EN/DE", year: 2024, link: "https://open.spotify.com/show/4Pr2Zcq6Nv3hKFcbz6nnLd", cover: "https://i.scdn.co/image/ab6765630000ba8a555555555555555555555555", blurb: "Medien, Justiz, Wahrnehmung – neu aufgerollt.", extra: { why: "Du willst Meta-Ebene & Fallanalyse – sauber erzählt." }, rating10: 8.5 },
-      { title: "Deep Doku", publisher: "rbb", episodes: 100, length: "30–60 min je Folge", lang: "DE", year: 2020, link: "https://open.spotify.com/show/0k6WIgcgSa00J6RtMquN8i", cover: "https://i.scdn.co/image/ab6765630000ba8a666666666666666666666666", blurb: "Milieus, Menschen, Nahaufnahmen – pick & play.", extra: { why: "Für Strecken ohne Bock auf lange Arcs – flexibel dosierbar." }, rating10: 8.2 },
-      { title: "Terror am OEZ – 5 Jahre nach dem Anschlag", publisher: "SZ / Spotify Studios", episodes: 6, length: "~4–5 h", lang: "DE", year: 2021, link: "https://open.spotify.com/show/2McX5GBmZ6TKIqOZT41ahB", cover: "https://i.scdn.co/image/ab6765630000ba8a777777777777777777777777", blurb: "Rekonstruktion eines rechten Anschlags.", extra: { why: "Sachlich, eindringlich – wichtig, gut produziert." }, rating10: 8.4 },
-    ];
-
-    const ALBUMS = [
-      // 90er (US)
-      { artist: "Nas", album: "Illmatic", year: 1994, cat: "90er (US)", length: "39:48", link: "https://open.spotify.com/album/3kEtdS2pH6hKcMU9Wioob1", cover: "https://upload.wikimedia.org/wikipedia/en/2/27/IllmaticNas.jpg", blurb: "Konzise, zeitlos, jede Zeile sitzt – East-Coast-Blueprint.", extra: { release: "1994", producers: "DJ Premier, Pete Rock, Q-Tip, Large Professor, L.E.S.", keyTracks: "N.Y. State of Mind; The World Is Yours; Memory Lane", why: "Du willst Dichte & Fokus – 39 Minuten ohne Skip." }, rating10: 8.9 },
-      { artist: "OutKast", album: "Aquemini", year: 1998, cat: "90er (US)", length: "~1:02 h", link: "https://open.spotify.com/intl-de/album/5rAKpmOCOjMwkMjBpTGVQw", cover: "https://upload.wikimedia.org/wikipedia/en/0/0a/OutKast-Aquemini.jpg", blurb: "Funk, Soul, Rap – visionär und warm.", extra: { release: "1998", producers: "OutKast, Mr. DJ", keyTracks: "Rosa Parks; SpottieOttieDopaliscious; Da Art of Storytellin' (Pt. 1)", why: "Groove + Storytelling – perfekte Fahrmusik." }, rating10: 9.5 },
-      { artist: "The Notorious B.I.G.", album: "Life After Death", year: 1997, cat: "90er (US)", link: "https://open.spotify.com/album/7dRdaGSxgcBdJnrOviQRuB", cover: "https://upload.wikimedia.org/wikipedia/en/7/7c/NotoriousB.I.G.LifeAfterDeath.jpg", blurb: "Storytelling bis Club – opulentes Doppelalbum.", extra: { release: "1997", keyTracks: "Hypnotize; Ten Crack Commandments; Mo Money Mo Problems", why: "Bandbreite & Hits – beides drin." }, rating10: 9.0 },
-      { artist: "Wu-Tang Clan", album: "Enter the Wu-Tang (36 Chambers)", year: 1993, cat: "90er (US)", length: "58:26", link: "https://open.spotify.com/album/0ujpvwNskNwgU6nb2krDZS", cover: "https://upload.wikimedia.org/wikipedia/en/5/53/Wu-TangClanEntertheWu-Tang36Chambers.jpg", blurb: "Roh, düster, ikonisch – RZA-Ästhetik pur.", extra: { release: "1993", keyTracks: "C.R.E.A.M.; Protect Ya Neck; Da Mystery of Chessboxin'", why: "Du magst Dreck & Energie – pures Fundament." }, rating10: 9.3 },
-      { artist: "Dr. Dre", album: "2001", year: 1999, cat: "90er (US)", link: "https://open.spotify.com/album/7q2B4M5EiBkqrlsNW8lB7N", cover: "https://upload.wikimedia.org/wikipedia/en/2/2f/2001_Dr._Dre_album_cover.jpg", blurb: "Crisper West-Coast-Sound, Cinemascope-Produktion.", extra: { release: "1999", keyTracks: "Still D.R.E.; The Next Episode; Forgot About Dre", why: "Kino-Production für die Autobahn." }, rating10: 8.8 },
-      // weitere 90er
-      { artist: "Mobb Deep", album: "The Infamous", year: 1995, cat: "90er (US)", link: "https://open.spotify.com/album/6eE8S0Im8xZyUu0jWqd2rA", cover: "https://upload.wikimedia.org/wikipedia/en/6/69/MobbDeepTheInfamous.jpg", blurb: "Kalter Queensbridge-Realismus.", extra: { keyTracks: "Shook Ones, Pt. II; Survival of the Fittest", why: "Düstere Fahrten – Textur & Spannung." }, rating10: 9.1 },
-      { artist: "A Tribe Called Quest", album: "Midnight Marauders", year: 1993, cat: "90er (US)", link: "https://open.spotify.com/album/6RZUqkomCmb8zCRqc9eznB", cover: "https://upload.wikimedia.org/wikipedia/en/6/6b/ATCQMidnightMarauders.jpg", blurb: "Jazzrap-Meisterklasse, butterweich.", extra: { keyTracks: "Award Tour; Electric Relaxation", why: "Smooth rollen – vibey & intelligent." }, rating10: 9.2 },
-      { artist: "2Pac", album: "All Eyez on Me", year: 1996, cat: "90er (US)", link: "https://open.spotify.com/album/2dL9Q9KcQ1xxjL8U7K0i6C", cover: "https://upload.wikimedia.org/wikipedia/en/6/6d/2Pac_-_All_Eyez_on_Me_Cover.jpg", blurb: "Doppelalbum – Größe, Pathos, Hits.", extra: { keyTracks: "California Love; Ambitionz Az a Ridah", why: "Große Gesten – Highway-Klassiker." }, rating10: 8.7 },
-      { artist: "Raekwon", album: "Only Built 4 Cuban Linx…", year: 1995, cat: "90er (US)", link: "https://open.spotify.com/album/6i6folBtxKV28WX3msQ4FE", cover: "https://upload.wikimedia.org/wikipedia/en/0/0e/Raekwon_Only_Built_4_Cuban_Linx.jpg", blurb: "Mafia-Rap in Lila – cineastisch.", extra: { keyTracks: "Ice Cream; Criminology; Incarcerated Scarfaces", why: "Film-Rap – Bilder im Kopf garantiert." }, rating10: 9.0 },
-      { artist: "Lauryn Hill", album: "The Miseducation of Lauryn Hill", year: 1998, cat: "90er (US)", link: "https://open.spotify.com/album/1BZoqf8Zje5nGdwZhOjAtD", cover: "https://upload.wikimedia.org/wikipedia/en/5/5e/LaurynHillTheMiseducationofLaurynHillalbumcover.jpg", blurb: "Rap, Soul, R&B – ein Monument.", extra: { keyTracks: "Doo Wop (That Thing); Ex-Factor", why: "Melodie + Substanz – perfektes Gleichgewicht." }, rating10: 9.4 },
-
-      // 2000er
-      { artist: "JAY-Z", album: "The Blueprint", year: 2001, cat: "2000er", link: "https://open.spotify.com/album/54I5tDCMjnNVWSENHg8EDH", cover: "https://upload.wikimedia.org/wikipedia/en/2/2a/The_Blueprint.png", blurb: "Soul-Samples, Souveränität, Klassiker.", extra: { keyTracks: "Takeover; Izzo (H.O.V.A.)", why: "Klare Bars + klassische Beats – straight durch." }, rating10: 9.0 },
-      { artist: "OutKast", album: "Stankonia", year: 2000, cat: "2000er", link: "https://open.spotify.com/album/3F1VmEfxc2cO8WHrLhitiR", cover: "https://upload.wikimedia.org/wikipedia/en/a/a5/OutKast_-_Stankonia.JPG", blurb: "Experimentierfreude, große Singles.", extra: { keyTracks: "Ms. Jackson; B.O.B.; So Fresh, So Clean", why: "Energie + Abwechslung – roadtrip-tauglich." }, rating10: 9.1 },
-      { artist: "50 Cent", album: "Get Rich or Die Tryin'", year: 2003, cat: "2000er", link: "https://open.spotify.com/album/0OfzVAXf5aVP4W4NIOLTKj", cover: "https://upload.wikimedia.org/wikipedia/en/9/9a/Get_Rich_Or_Die_Tryin%27.PNG", blurb: "Debüt-Wucht – Ohrwürmer & Street.", extra: { keyTracks: "In Da Club; Many Men", why: "Eingängige Hooks mit Kante – Tempo!" }, rating10: 8.6 },
-      { artist: "Madvillain", album: "Madvillainy", year: 2004, cat: "2000er", link: "https://open.spotify.com/album/19bQiwEKhXUBJWY6oV3KZk", cover: "https://upload.wikimedia.org/wikipedia/en/5/5e/Madvillainy_cover.png", blurb: "DOOM x Madlib – Sample-Puzzle, Kult.", extra: { keyTracks: "Accordion; All Caps", why: "Detailhörten – ideal für langes Fahren." }, rating10: 9.5 },
-      { artist: "Kanye West", album: "Late Registration", year: 2005, cat: "2000er", link: "https://open.spotify.com/album/5ll74bqtkcXlKE7wwkMq4g", cover: "https://upload.wikimedia.org/wikipedia/en/f/f4/Late_registration_cd_cover.jpg", blurb: "Barocke Arrangements, starke Hooks.", extra: { keyTracks: "Gold Digger; Touch the Sky", why: "Großes Pop-Rap-Kino – sehr rund." }, rating10: 9.0 },
-      // weitere 2000er
-      { artist: "Eminem", album: "The Marshall Mathers LP", year: 2000, cat: "2000er", link: "https://open.spotify.com/album/6t7956yu5zYf5A829XRiHC", cover: "https://upload.wikimedia.org/wikipedia/en/6/67/The_Marshall_Mathers_LP.png", blurb: "Bissig, theatralisch, technisch scharf.", extra: { keyTracks: "Stan; The Real Slim Shady", why: "Dramaturgie & Technik – keeps you alert." }, rating10: 9.1 },
-      { artist: "Clipse", album: "Hell Hath No Fury", year: 2006, cat: "2000er", link: "https://open.spotify.com/album/2PzUkvZvt8NlmMQu9Q0L5H", cover: "https://upload.wikimedia.org/wikipedia/en/7/7f/Clipse_-_Hell_Hath_No_Fury.png", blurb: "Neptunes-Minimalismus, Koks-Rap präzise.", extra: { keyTracks: "Mr. Me Too; Keys Open Doors", why: "Knochentrockene Beats – top für Nachtfahrten." }, rating10: 9.4 },
-      { artist: "Lil Wayne", album: "Tha Carter III", year: 2008, cat: "2000er", link: "https://open.spotify.com/album/5swgPX7kYcK0hTc2hjTqlx", cover: "https://upload.wikimedia.org/wikipedia/en/0/07/ThaCarterIII.jpg", blurb: "Peak-Wayne: Melodien, Bars, Pop-Moment.", extra: { keyTracks: "A Milli; Lollipop", why: "Spaß + Skill – hält wach." }, rating10: 8.8 },
-      { artist: "Kanye West", album: "Graduation", year: 2007, cat: "2000er", link: "https://open.spotify.com/album/4SZko61aMnmgvNhfhgTuD3", cover: "https://upload.wikimedia.org/wikipedia/en/7/70/Graduation_%28album%29.jpg", blurb: "Stadion-Rap, Synth-Glanz.", extra: { keyTracks: "Stronger; Flashing Lights", why: "Große Melodien + Tempo – Autobahn-tauglich." }, rating10: 8.9 },
-      { artist: "Common", album: "Be", year: 2005, cat: "2000er", link: "https://open.spotify.com/album/2r2r78NE05YjyHy6QAb8VT", cover: "https://upload.wikimedia.org/wikipedia/en/0/0c/Common_-_Be.jpg", blurb: "Kanye/J Dilla-Magie – warm, fokussiert.", extra: { keyTracks: "Go!; The Corner", why: "Soulful & konzentriert – fließt." }, rating10: 8.7 },
-
-      // 2010er
-      { artist: "Kendrick Lamar", album: "good kid, m.A.A.d city", year: 2012, cat: "2010er", link: "https://open.spotify.com/album/6PBZN8cbwkqm1ERj2BGXJ1", cover: "https://upload.wikimedia.org/wikipedia/en/a/a3/Good_Kid%2C_M.A.A.D_City_Album_Cover.jpg", blurb: "Coming-of-age als Film; perfektes Sequencing.", extra: { keyTracks: "Backseat Freestyle; Money Trees", why: "Story-Arcs – hält dich fokussiert." }, rating10: 9.4 },
-      { artist: "Kendrick Lamar", album: "To Pimp a Butterfly", year: 2015, cat: "2010er", link: "https://open.spotify.com/album/7ycBtnsMtyVbbwTfJwRjSP", cover: "https://upload.wikimedia.org/wikipedia/en/9/9f/To_Pimp_a_Butterfly.png", blurb: "Jazz, Funk, Politik – maximal ambitioniert.", extra: { keyTracks: "Alright; King Kunta", why: "Anspruch + Drive – großes Kino." }, rating10: 9.6 },
-      { artist: "Run The Jewels", album: "RTJ2", year: 2014, cat: "2010er", link: "https://open.spotify.com/album/5mAPk4qeNqVLtNyDaNnUAL", cover: "https://upload.wikimedia.org/wikipedia/en/4/4f/RunTheJewelsRTJ2.jpg", blurb: "Aggro-Duo, dicht produziert.", extra: { keyTracks: "Blockbuster Night Pt. 1; Close Your Eyes", why: "Energieschübe – gegen Müdigkeit." }, rating10: 9.0 },
-      { artist: "J. Cole", album: "2014 Forest Hills Drive", year: 2014, cat: "2010er", link: "https://open.spotify.com/album/7viNUmZZ8ztn2UB4XB3jIL", cover: "https://upload.wikimedia.org/wikipedia/en/e/e3/2014ForestHillsDrive.jpg", blurb: "Selbstreflexion, Hooks, Konsistenz.", extra: { keyTracks: "No Role Modelz; G.O.M.D.", why: "Kohärentes Album – fährt sich weg." }, rating10: 8.8 },
-      { artist: "Travis Scott", album: "ASTROWORLD", year: 2018, cat: "2010er", link: "https://open.spotify.com/album/41GuZcammIkupMPKH2OJ6I", cover: "https://upload.wikimedia.org/wikipedia/en/0/0b/Travis_Scott_-_Astroworld.png", blurb: "Vergnügungspark-Mix, nahtlose Übergänge.", extra: { keyTracks: "STARGAZING; SICKO MODE", why: "Flow-State durch Übergänge – Drive im Kopf." }, rating10: 8.5 },
-      { artist: "Freddie Gibbs & Madlib", album: "Bandana", year: 2019, cat: "2010er", link: "https://open.spotify.com/album/5eEakz2cklF3IcgINJH5wZ", cover: "https://upload.wikimedia.org/wikipedia/en/c/c2/Freddie_Gibbs_and_Madlib_-_Bandana.png", blurb: "Scharfe Bars, sample-reiche Beats.", extra: { keyTracks: "Crime Pays; Palmolive", why: "Film im Kopf + Technik – passt." }, rating10: 9.1 },
-      // weitere 2010er
-      { artist: "Kanye West", album: "My Beautiful Dark Twisted Fantasy", year: 2010, cat: "2010er", link: "https://open.spotify.com/album/20r762YmB5HeofjMCiPMLv", cover: "https://upload.wikimedia.org/wikipedia/en/a/a0/My_Beautiful_Dark_Twisted_Fantasy.jpg", blurb: "Opulent, detailverliebt.", extra: { keyTracks: "POWER; Runaway", why: "Große Gesten + Präzision – Langstrecke-geeignet." }, rating10: 9.7 },
-      { artist: "Drake", album: "Take Care", year: 2011, cat: "2010er", link: "https://open.spotify.com/album/6X1x82kppWZmDzlXXK3y3q", cover: "https://upload.wikimedia.org/wikipedia/en/a/af/Drake_-_Take_Care_cover.jpg", blurb: "Nocturner R&B-Blend – prägte ein Jahrzehnt.", extra: { keyTracks: "Headlines; Marvin's Room", why: "Nachtfahrt-Vibe – smooth, fokussiert." }, rating10: 8.9 },
-      { artist: "A Tribe Called Quest", album: "We Got It from Here… Thank You 4 Your Service", year: 2016, cat: "2010er", link: "https://open.spotify.com/album/2J0KQ8rHWwRQ3tS3h4pF3S", cover: "https://upload.wikimedia.org/wikipedia/en/7/7b/A_Tribe_Called_Quest_-_We_Got_It_from_Here..._Thank_You_4_Your_Service.png", blurb: "Abschied & Triumph zugleich.", extra: { keyTracks: "We The People....; The Space Program", why: "Legacy + Moderne – sehr rund." }, rating10: 9.2 },
-      { artist: "Danny Brown", album: "Atrocity Exhibition", year: 2016, cat: "2010er", link: "https://open.spotify.com/album/1Q3t3x0R0x4Yf0c6xQWmv5", cover: "https://upload.wikimedia.org/wikipedia/en/4/4f/Danny_Brown_-_Atrocity_Exhibition.png", blurb: "Avant-Rap mit Sog – wild, aber kohärent.", extra: { keyTracks: "Ain't It Funny; Pneumonia", why: "Kante + Kunst – bleibt spannend am Steuer." }, rating10: 9.0 },
-      { artist: "Pusha T", album: "DAYTONA", year: 2018, cat: "2010er", link: "https://open.spotify.com/album/3D7ozZLQumJ7MEsylpR9v3", cover: "https://upload.wikimedia.org/wikipedia/en/5/5b/Pusha_T_-_Daytona.png", blurb: "Kurz, fokussiert, jede Minute sitzt.", extra: { keyTracks: "If You Know You Know; The Games We Play", why: "Knappe, dichte Alben – top fürs Fahren." }, rating10: 9.0 },
-
-      // 2020er
-      { artist: "Kendrick Lamar", album: "Mr. Morale & The Big Steppers", year: 2022, cat: "2020er", link: "https://open.spotify.com/album/79ONNoS4M9tfIA1mYLBYVX", cover: "https://upload.wikimedia.org/wikipedia/en/9/9a/Kendrick_Lamar_-_Mr._Morale_%26_the_Big_Steppers.png", blurb: "Therapie-Rap, mutig & groß.", extra: { keyTracks: "N95; Father Time; Mother I Sober", why: "Emotion & Entwicklung – Drehbuchstruktur über zwei Akte." }, rating10: 8.5 },
-      { artist: "Tyler, the Creator", album: "Call Me If You Get Lost", year: 2021, cat: "2020er", link: "https://open.spotify.com/album/45ba6QAtNrdv6Ke4MFOKk9", cover: "https://upload.wikimedia.org/wikipedia/en/4/40/Tyler%2C_the_Creator_-_Call_Me_If_You_Get_Lost.png", blurb: "Mixtape-Energie + Luxus-Ästhetik.", extra: { keyTracks: "WUSYANAME; CORSO; JUGGERNAUT", why: "Reise-Motiv im Album – passt perfekt zum Roadtrip." }, rating10: 8.8 },
-      { artist: "Little Simz", album: "Sometimes I Might Be Introvert", year: 2021, cat: "2020er", link: "https://open.spotify.com/album/3zXjR3y2dUWklKmmp6lEhy", cover: "https://upload.wikimedia.org/wikipedia/en/1/17/Little_Simz_-_Sometimes_I_Might_Be_Introvert.png", blurb: "Orchestraler UK-Rap, filmisch.", extra: { keyTracks: "Introvert; Woman", why: "Große, cineastische Bögen – fokussiert beim Fahren." }, rating10: 9.1 },
-      { artist: "JID", album: "The Forever Story", year: 2022, cat: "2020er", link: "https://open.spotify.com/album/5qM6z6GULmY9f0K1ZqAv6x", cover: "https://upload.wikimedia.org/wikipedia/en/4/4c/JID_-_The_Forever_Story.png", blurb: "Technik + Seele, sehr dynamisch.", extra: { keyTracks: "Dance Now; Surround Sound", why: "Abwechslung & Drive – null Müdigkeit." }, rating10: 8.7 },
-      { artist: "JPEGMAFIA & Danny Brown", album: "SCARING THE HOES", year: 2023, cat: "2020er", link: "https://open.spotify.com/album/0Uo0EYCo8RgoQv1zQ58QF2", cover: "https://upload.wikimedia.org/wikipedia/en/1/1d/JPEGMAFIA_and_Danny_Brown_-_Scaring_the_Hoes.png", blurb: "Avant-Krach mit Humor – knallt.", extra: { keyTracks: "LEAN BEEF PATTY; SCARING THE HOES", why: "Wenn du Kante willst, um wach zu bleiben." }, rating10: 8.3 },
-      // Deutschrap
-      { artist: "Kool Savas", album: "King", year: 2014, cat: "Deutschrap", link: "https://open.spotify.com/album/6k4Rj0V2Yk9Yk3bUo2gE6S", cover: "https://upload.wikimedia.org/wikipedia/en/e/e7/Kool_Savas_-_King.jpg", blurb: "Technik-Benchmark.", extra: { keyTracks: "LMS 2012; Aura", why: "Wenn du Punchlines + Technik liebst." }, rating10: 8.2 },
-      { artist: "K.I.Z", album: "Hurra die Welt geht unter", year: 2015, cat: "Deutschrap", link: "https://open.spotify.com/album/4oW3fO6Y5iXxk5UQn2cXQO", cover: "https://upload.wikimedia.org/wikipedia/en/0/03/K.I.Z._-_Hurra_die_Welt_geht_unter.jpg", blurb: "Satire, Hooks, Politik.", extra: { keyTracks: "Boom Boom Boom; Hurra die Welt…", why: "Für Tempo + Lachen zwischen den True-Crime-Brocken." }, rating10: 8.4 },
-      { artist: "RIN", album: "Eros", year: 2017, cat: "Deutschrap", link: "https://open.spotify.com/album/6ImQ9mA4o1rZgR3xZC7R8U", cover: "https://upload.wikimedia.org/wikipedia/en/f/f6/RIN_-_Eros.jpg", blurb: "Melodischer Trap-Pop.", extra: { keyTracks: "Bros; Dior 2001", why: "Leichtfüßig für freie Autobahn – Kopfnicker." }, rating10: 7.9 },
-      { artist: "Trettmann", album: "#DIY", year: 2017, cat: "Deutschrap", link: "https://open.spotify.com/album/0V6QOdE31E4n4t9n8WlKfN", cover: "https://upload.wikimedia.org/wikipedia/en/b/b5/Trettmann_-_DIY.jpg", blurb: "Cloud-Dancehall, eisig & elegant.", extra: { keyTracks: "Grauer Beton; Knöcheltief", why: "Nachtfahrt-Atmosphäre – minimal & effektiv." }, rating10: 8.3 },
-      { artist: "Shirin David", album: "Bitches brauchen Rap", year: 2021, cat: "Deutschrap", link: "https://open.spotify.com/album/0KqX0zR6M0zYlQ1w9yW3bS", cover: "https://upload.wikimedia.org/wikipedia/en/f/f5/Shirin_David_-_Bitches_brauchen_Rap.png", blurb: "Pop-Rap auf Premium-Level.", extra: { keyTracks: "Lieben wir; Ich darf das", why: "Hook-Maschine – hält die Stimmung hoch." }, rating10: 7.8 },
-    ];
-
-    // =============================================================
-    // UI Helpers
-    // =============================================================
-    function Tag({ active, children, onClick }) {
-      return (
-        <button
-          onClick={onClick}
-          className={
-            "px-3 py-1 rounded-full border text-sm transition transform will-change-transform " +
-            (active
-              ? "bg-[#9ED2FF] text-black border-transparent scale-[1.02]"
-              : "bg-white/5 text-white border-white/30 hover:border-white hover:bg-white/10 hover:scale-[1.02]")
-          }
-        >
-          {children}
-        </button>
-      );
-    }
-
-    function StarBar({ value }) {
-      const v = Math.max(0, Math.min(10, value ?? 0));
-      return (
-        <div className="flex items-center gap-1" aria-label={`Bewertung ${v}/10`}>
-          {Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className={`h-2 w-5 rounded ${i < Math.round(v) ? 'bg-[#9ED2FF]' : 'bg-white/10'}`} />
-          ))}
-          <span className="ml-2 text-xs" style={{ color: theme.sub }}>{v ? v.toFixed(1) + ' / 10' : '—'}</span>
-        </div>
-      );
-    }
-
-    function Cover({ src, title }) {
-      if (!src) {
-        return (
-          <div className="relative h-44 w-full overflow-hidden bg-gradient-to-br from-[#1e293b] to-[#0b1220] flex items-end">
-            <div className="p-3 text-white/80 text-sm line-clamp-2">{title}</div>
-          </div>
-        );
-      }
-      return (
-        <div className="relative h-44 w-full overflow-hidden">
-          <img src={src} alt="cover" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.06]" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0" />
-        </div>
-      );
-    }
-
-    function Card({ id, title, meta, right, blurb, link, rating, details, cover, onToggle, open }) {
-      const isOpen = open === id;
-      return (
-        <div
-          onClick={() => onToggle(id)}
-          className="group relative rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.9)] p-0 shadow-sm hover:shadow-2xl hover:border-[#9ED2FF] transition cursor-pointer overflow-hidden"
-        >
-          <Cover src={cover} title={title} />
-          <div className="p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-semibold leading-tight text-white group-hover:text-[#9ED2FF] transition">{title}</h3>
-                <p className="text-sm" style={{ color: theme.sub }}>{meta}</p>
-              </div>
-              {right && <div className="text-xs" style={{ color: theme.accent }}>{right}</div>}
-            </div>
-            {blurb && <p className="mt-3 text-[15px] leading-relaxed" style={{ color: theme.text }}>{blurb}</p>}
-            <div className="mt-3"><StarBar value={rating} /></div>
-            <div className={`mt-4 overflow-hidden transition-[max-height] duration-300 ${isOpen ? 'max-h-[520px]' : 'max-h-0'}`}>
-              {details && (
-                <div className="rounded-t-xl border border-white/10 bg-black/30 p-4 text-sm" style={{ color: theme.text }}>
-                  {details.release && <p><span style={{ color: theme.accent }}>Release:</span> {details.release}</p>}
-                  {details.producers && <p><span style={{ color: theme.accent }}>Produktion:</span> {details.producers}</p>}
-                  {details.keyTracks && <p><span style={{ color: theme.accent }}>Key Tracks:</span> {details.keyTracks}</p>}
-                  {details.awards && <p><span style={{ color: theme.accent }}>Awards:</span> {details.awards}</p>}
-                  {details.why && <p className="mt-2 italic">Warum für dich: {details.why}</p>}
-                  <a href={link} target="_blank" rel="noreferrer noopener" className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-[#9ED2FF] text-black px-3 py-1 text-xs hover:brightness-110">
-                    Auf Spotify öffnen
-                  </a>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // =============================================================
-    // Main Component
-    // =============================================================
-    function DukeysRoadtrip() {
-      const [tab, setTab] = useState("podcasts"); // 'podcasts' | 'alben'
-      const [q, setQ] = useState("");
-      const [filters, setFilters] = useState([]);
-      const [open, setOpen] = useState(null);
-
-      // runtime "tests"
-      useEffect(() => {
-        PODCASTS.forEach((p, i) => {
-          console.assert(!!p.title && !!p.publisher && !!p.year && !!p.link, `PODCASTS[${i}] missing required fields`);
-          console.assert(p.rating10 === undefined || (p.rating10 >= 0 && p.rating10 <= 10), `PODCASTS[${i}] rating out of range`);
-        });
-        ALBUMS.forEach((a, i) => {
-          console.assert(!!a.artist && !!a.album && !!a.year && !!a.link, `ALBUMS[${i}] missing required fields`);
-          console.assert(a.rating10 === undefined || (a.rating10 >= 0 && a.rating10 <= 10), `ALBUMS[${i}] rating out of range`);
-        });
-        const pTitles = new Set();
-        PODCASTS.forEach(p => { const k = p.title.toLowerCase(); console.assert(!pTitles.has(k), `Duplicate podcast title: ${p.title}`); pTitles.add(k); });
-        const aKeys = new Set();
-        ALBUMS.forEach(a => { const k = `${a.artist.toLowerCase()}__${a.album.toLowerCase()}`; console.assert(!aKeys.has(k), `Duplicate album: ${a.artist} - ${a.album}`); aKeys.add(k); });
-      }, []);
-
-      const podcastTags = ["DE", "EN", "< 6 h", "6–9 h", "> 9 h", "Neu (2024/25)"];
-      const albumTags = ["90er (US)", "2000er", "2010er", "2020er", "Deutschrap"];
-
-      const podcasts = useMemo(() => PODCASTS.map(p => ({
-        ...p,
-        bucket: p.length.includes("3") || p.length.includes("4") || p.length.includes("5") ? "< 6 h" : (p.length.includes("10") || p.length.includes("12")) ? "> 9 h" : "6–9 h",
-        fresh: p.year >= 2024 ? "Neu (2024/25)" : "Alt/klassisch",
-      })), []);
-
-      const albums = useMemo(() => ALBUMS, []);
-
-      const list = useMemo(() => {
-        const text = q.trim().toLowerCase();
-        if (tab === "podcasts") {
-          return podcasts.filter(p => {
-            const hit =
-              p.title.toLowerCase().includes(text) ||
-              p.publisher.toLowerCase().includes(text) ||
-              (p.blurb || "").toLowerCase().includes(text);
-            const tagOk = filters.length === 0 || filters.every(f => [p.lang, p.bucket, p.fresh].includes(f));
-            return hit && tagOk;
-          });
-        } else {
-          return albums.filter(a => {
-            const hit =
-              a.artist.toLowerCase().includes(text) ||
-              a.album.toLowerCase().includes(text) ||
-              (a.blurb || "").toLowerCase().includes(text);
-            const tagOk = filters.length === 0 || filters.includes(a.cat);
-            return hit && tagOk;
-          });
-        }
-      }, [q, filters, tab, podcasts, albums]);
-
-      const toggleFilter = (tag) => setFilters(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
-
-      return (
-        <div className="min-h-screen" style={{ background: `radial-gradient(1200px 600px at 20% -10%, #14213D 0%, ${theme.bg} 40%)` }}>
-          {/* Header */}
-          <header className="sticky top-0 z-10 backdrop-blur bg-black/40 border-b border-white/10">
-            <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">Dukey’s Roadtrip</h1>
-              <nav className="flex gap-2">
-                <button
-                  className={`px-3 py-1 rounded-full text-sm border ${tab === 'podcasts' ? 'bg-white text-black border-white' : 'bg-transparent text-white border-white/40 hover:border-white'}`}
-                  onClick={() => { setTab('podcasts'); setFilters([]); setQ(""); setOpen(null); }}
-                >Podcasts</button>
-                <button
-                  className={`px-3 py-1 rounded-full text-sm border ${tab === 'alben' ? 'bg-white text-black border-white' : 'bg-transparent text-white border-white/40 hover:border-white'}`}
-                  onClick={() => { setTab('alben'); setFilters([]); setQ(""); setOpen(null); }}
-                >Alben</button>
-              </nav>
-            </div>
-          </header>
-
-          {/* Controls + Content */}
-          <main className="mx-auto max-w-6xl px-4 py-8 text-white">
-            <section className="mb-8">
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto] items-center">
-                <input
-                  value={q}
-                  onChange={e => setQ(e.target.value)}
-                  placeholder={tab === 'podcasts' ? 'Suche nach Titel, Publisher, Schlagwort…' : 'Suche nach Artist, Album, Stichwort…'}
-                  className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-[15px] outline-none focus:border-white/40 placeholder:text-white/50"
-                />
-                <div className="text-sm text-white/60">{list.length} Ergebnisse</div>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {(tab === 'podcasts' ? podcastTags : albumTags).map(tag => (
-                  <Tag key={tag} active={filters.includes(tag)} onClick={() => toggleFilter(tag)}>{tag}</Tag>
-                ))}
-                {filters.length > 0 && (
-                  <button className="ml-2 text-sm underline" onClick={() => setFilters([])}>Filter zurücksetzen</button>
-                )}
-              </div>
-            </section>
-
-            {tab === 'alben' ? (
-              <section className="space-y-8">
-                {albumTags.map(group => (
-                  <div key={group}>
-                    <h2 className="mb-3 text-lg font-semibold text-white/90">{group}</h2>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {list.filter(a => a.cat === group).map(a => (
-                        <Card
-                          key={`${a.artist}-${a.album}`}
-                          id={`${a.artist}-${a.album}`}
-                          title={`${a.artist} — ${a.album}`}
-                          meta={`${a.cat} · ${a.year}${a.length ? ` · ${a.length}` : ''}`}
-                          right={a.rating10 ? `${a.rating10.toFixed(1)}/10` : ''}
-                          blurb={a.blurb}
-                          link={a.link}
-                          rating={a.rating10}
-                          details={a.extra}
-                          cover={a.cover}
-                          onToggle={(id) => setOpen(prev => prev === id ? null : id)}
-                          open={open}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </section>
-            ) : (
-              <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {list.map((p) => (
-                  <Card
-                    key={p.title}
-                    id={p.title}
-                    title={p.title}
-                    meta={`${p.publisher} · ${p.episodes} Folgen · ${p.length} · ${p.lang}`}
-                    right={`${p.year}`}
-                    blurb={p.blurb}
-                    link={p.link}
-                    rating={p.rating10}
-                    details={p.extra}
-                    cover={p.cover}
-                    onToggle={(id) => setOpen(prev => prev === id ? null : id)}
-                    open={open}
-                  />
-                ))}
-              </section>
-            )}
-
-            {/* Notes */}
-            <section className="mt-10 rounded-2xl border border-white/10 bg-white/5 p-5">
-              <h2 className="text-base font-semibold">Hinweise</h2>
-              <ul className="mt-2 text-[15px] space-y-1 list-disc pl-5 text-white/80">
-                <li>Karte klicken → Details (Release/Produktion/Key Tracks/Awards/Warum für dich).</li>
-                <li>Bewertungen im 10-Punkte-System. Mischung aus Kritiker-Scores & kuratiertem Urteil.</li>
-                <li>Design: hoher Kontrast, Baby-Blau (#9ED2FF), Hover-Glow + Zoom.</li>
-              </ul>
-            </section>
-          </main>
-
-          {/* Footer */}
-          <footer className="mx-auto max-w-6xl px-4 py-10 text-sm text-white/60">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p>Dukey’s Roadtrip – kuratierte Podcasts & Alben für lange Fahrten.</p>
-              <p>© {new Date().getFullYear()} Dukey’s Roadtrip</p>
-            </div>
-          </footer>
-        </div>
-      );
-    }
-
-    // Mount
-    ReactDOM.createRoot(document.getElementById('root')).render(<DukeysRoadtrip />);
+    // ========= Init =========
+    document.getElementById("year").textContent = new Date().getFullYear();
+    render();
   </script>
 </body>
 </html>
